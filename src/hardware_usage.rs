@@ -89,14 +89,14 @@ impl HardwareService {
     }
 
     pub fn get(&self) -> HardwareInfo {
-        let mut sysinfo_sys = sysinfo::System::new();
-        let disk_usage = get_disk_usage(&mut sysinfo_sys);
-        let memory_usage = get_memory_usage(&mut sysinfo_sys);
+        //        let mut sysinfo_sys = sysinfo::System::new();
+        //        let disk_usage = get_disk_usage(&mut sysinfo_sys);
+        //        let memory_usage = get_memory_usage(&mut sysinfo_sys);
         let cpu_usage = self.cpu_usage.read().map(|usage| usage.clone()).unwrap_or(Vec::new());
         HardwareInfo {
             cpu_usage,
-            disk_usage,
-            memory_usage,
+            disk_usage: HardwareUsage::default(),
+            memory_usage: HardwareUsage::default(),
         }
     }
 
@@ -105,7 +105,7 @@ impl HardwareService {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct HardwareUsage {
     pub total: i64,
