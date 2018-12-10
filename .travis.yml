@@ -8,9 +8,9 @@ install:
 before_script:
   - cargo fetch --verbose
 script:
-  - cargo +nightly-2018-12-06 fmt -- --check \
-    && RUST_BACKTRACE=1 cargo test --verbose --all \
-    && cargo +nightly-2018-12-06 clippy --all-targets --all-features
+  - cargo +nightly-2018-12-06 fmt -- --check
+     && RUST_BACKTRACE=1 cargo test --verbose --all
+     && cargo +nightly-2018-12-06 clippy --all-targets --all-features
 matrix:
   allow_failures:
     - rust: nightly
