@@ -1,13 +1,15 @@
 mod binary_update;
+mod codechain_process;
 mod fs_util;
 mod git_update;
 mod git_util;
 mod rpc;
 mod update;
 
+use std::sync::Mutex;
 use std::cell::Cell;
-use std::fs::OpenOptions;
-use std::io::Error as IOError;
+use std::fs::{File, OpenOptions};
+use std::io::{Error as IOError, Write};
 use std::option::Option;
 use std::path::Path;
 use std::result::Result;
@@ -21,6 +23,7 @@ use subprocess::{Exec, ExitStatus, Popen, PopenError, Redirection};
 
 use super::rpc::types::{NodeStatus, UpdateCodeChainRequest};
 use super::types::CommitHash;
+use self::codechain_process::CodeChainProcess;
 
 #[derive(Debug)]
 pub enum Error {
@@ -152,7 +155,7 @@ impl CodeChainStatus {
 
 pub struct Process {
     option: ProcessOption,
-    child: Option<Popen>,
+    child: Option<CodeChainProcess>,
     codechain_status: CodeChainStatus,
 }
 
@@ -449,36 +452,7 @@ impl Process {
             return Err(Error::Updating)
         }
 
-        let args_iter = args.split_whitespace();
-        let args_vec: Vec<String> = args_iter.map(|str| str.to_string()).collect();
-
-        let (p2p_port, rpc_port) = parse_ports(&args_vec);
-
-        let envs = Self::parse_env(env)?;
-
-        let file = OpenOptions::new().append(true).create(true).open(self.option.log_file_path.clone())?;
-
-        let mut exec = if Path::new(&self.option.codechain_dir).join("codechain").exists() {
-            Exec::cmd("./codechain")
-                .cwd(self.option.codechain_dir.clone())
-                .stdout(Redirection::File(file))
-                .stderr(Redirection::Merge)
-                .args(&args_vec)
-        } else {
-            Exec::cmd("cargo")
-                .arg("run")
-                .arg("--")
-                .cwd(self.option.codechain_dir.clone())
-                .stdout(Redirection::File(file))
-                .stderr(Redirection::Merge)
-                .args(&args_vec)
-        };
-
-        for (k, v) in envs {
-            exec = exec.env(k, v);
-        }
-
-        let child = exec.popen()?;
+        let child = CodeChainProcess::new(env, args, &self.option);
         self.child = Some(child);
 
         self.codechain_status = CodeChainStatus::Starting {
@@ -490,7 +464,7 @@ impl Process {
     }
 
     pub fn check_running(&mut self) -> bool {
-        self.child.as_mut().map_or(false, |child| child.poll().is_none())
+        self.child.map_or(false, |child| child.is_running())
     }
 
     fn is_updating(&self) -> bool {
@@ -528,7 +502,7 @@ impl Process {
 
         cinfo!(PROCESS, "Stop CodeChain");
 
-        let codechain = &mut self.child.as_mut().expect("Already checked");
+        let codechain = &mut self.child.expect("Already checked");
         ctrace!(PROCESS, "Send SIGTERM to CodeChain");
         codechain.terminate()?;
 
@@ -637,3 +611,4 @@ fn parse_port(args: &[String], option_name: &str) -> Option<u16> {
     let interface_string = interface_pos.and_then(|pos| args.get(pos));
     interface_string.and_then(|port| port.parse().ok())
 }
+
